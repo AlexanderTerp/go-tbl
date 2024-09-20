@@ -64,7 +64,7 @@ type Table struct {
 	out                     io.Writer
 	rows                    [][]string
 	lines                   [][][]string
-	cs                      map[int]int
+	cs                      map[int]int // Column Sizes? [column][row]
 	rs                      map[int]int
 	headers                 [][]string
 	footers                 [][]string
@@ -92,7 +92,7 @@ type Table struct {
 	hdrLine                 bool
 	borders                 Border
 	colSize                 int
-	headerParams            []string
+	headerColorSeqs         []string
 	columnsParams           []string
 	footerParams            []string
 	columnsAlign            []int
@@ -102,37 +102,37 @@ type Table struct {
 // Take io.Writer Directly
 func NewWriter(writer io.Writer) *Table {
 	t := &Table{
-		out:           writer,
-		rows:          [][]string{},
-		lines:         [][][]string{},
-		cs:            make(map[int]int),
-		rs:            make(map[int]int),
-		headers:       [][]string{},
-		footers:       [][]string{},
-		caption:       false,
-		captionText:   "Table caption.",
-		autoFmt:       true,
-		autoWrap:      true,
-		reflowText:    true,
-		mW:            MAX_ROW_WIDTH,
-		syms:          simpleSyms(CENTER, ROW, COLUMN),
-		pCenter:       CENTER,
-		pRow:          ROW,
-		pColumn:       COLUMN,
-		tColumn:       -1,
-		tRow:          -1,
-		hAlign:        ALIGN_DEFAULT,
-		fAlign:        ALIGN_DEFAULT,
-		align:         ALIGN_DEFAULT,
-		newLine:       NEWLINE,
-		rowLine:       false,
-		hdrLine:       true,
-		borders:       Border{Left: true, Right: true, Bottom: true, Top: true},
-		colSize:       -1,
-		headerParams:  []string{},
-		columnsParams: []string{},
-		footerParams:  []string{},
-		columnsAlign:  []int{}}
+		out:             writer,
+		rows:            [][]string{},
+		lines:           [][][]string{},
+		cs:              make(map[int]int),
+		rs:              make(map[int]int),
+		headers:         [][]string{},
+		footers:         [][]string{},
+		caption:         false,
+		captionText:     "Table caption.",
+		autoFmt:         true,
+		autoWrap:        true,
+		reflowText:      true,
+		mW:              MAX_ROW_WIDTH,
+		syms:            simpleSyms(CENTER, ROW, COLUMN),
+		pCenter:         CENTER,
+		pRow:            ROW,
+		pColumn:         COLUMN,
+		tColumn:         -1,
+		tRow:            -1,
+		hAlign:          ALIGN_DEFAULT,
+		fAlign:          ALIGN_DEFAULT,
+		align:           ALIGN_DEFAULT,
+		newLine:         NEWLINE,
+		rowLine:         false,
+		hdrLine:         true,
+		borders:         Border{Left: true, Right: true, Bottom: true, Top: true},
+		colSize:         -1,
+		headerColorSeqs: []string{},
+		columnsParams:   []string{},
+		footerParams:    []string{},
+		columnsAlign:    []int{}}
 	return t
 }
 
@@ -589,15 +589,15 @@ func (t *Table) printHeading() {
 	}
 
 	// Identify last column
-	end := len(t.cs) - 1
+	lastColIdx := len(t.cs) - 1
 
 	// Get pad function
 	padFunc := pad(t.hAlign)
 
 	// Checking for ANSI escape sequences for header
-	is_esc_seq := false
-	if len(t.headerParams) > 0 {
-		is_esc_seq = true
+	isEscSeq := false
+	if len(t.headerColorSeqs) > 0 {
+		isEscSeq = true
 	}
 
 	// Maximum height.
@@ -608,43 +608,43 @@ func (t *Table) printHeading() {
 		// Check if border is set
 		// Replace with space if not set
 		if !t.noWhiteSpace {
-			fmt.Fprint(t.out, ConditionString(t.borders.Left, t.syms[symNS], SPACE))
+			output := ConditionString(t.borders.Left, t.syms[symNS], SPACE)
+			fmt.Fprint(t.out, output)
 		}
 
-		for y := 0; y <= end; y++ {
+		for y := 0; y <= lastColIdx; y++ {
 			v := t.cs[y]
-			h := ""
+			header := ""
 
 			if y < len(t.headers) && x < len(t.headers[y]) {
-				h = t.headers[y][x]
+				header = t.headers[y][x]
 			}
 			if t.autoFmt {
-				h = Title(h)
+				header = Title(header)
 			}
-			pad := ConditionString((y == end && !t.borders.Left), SPACE, t.syms[symNS])
+			pad := ConditionString((y == lastColIdx && !t.borders.Left), SPACE, t.syms[symNS])
 			if t.noWhiteSpace {
-				pad = ConditionString((y == end && !t.borders.Left), SPACE, t.tablePadding)
+				pad = ConditionString((y == lastColIdx && !t.borders.Left), SPACE, t.tablePadding)
 			}
-			if is_esc_seq {
+			padded := padFunc(header, SPACE, v)
+			if isEscSeq {
+				colorSeq := t.headerColorSeqs[y]
+				formatted := format(padded, colorSeq)
 				if !t.noWhiteSpace {
-					fmt.Fprintf(t.out, " %s %s",
-						format(padFunc(h, SPACE, v),
-							t.headerParams[y]), pad)
+					out := fmt.Sprintf(" %s %s", formatted, pad)
+					fmt.Fprint(t.out, out)
 				} else {
-					fmt.Fprintf(t.out, "%s %s",
-						format(padFunc(h, SPACE, v),
-							t.headerParams[y]), pad)
+					out := fmt.Sprintf("%s%s", formatted, pad)
+					fmt.Fprint(t.out, out)
 				}
 			} else {
 				if !t.noWhiteSpace {
-					fmt.Fprintf(t.out, " %s %s",
-						padFunc(h, SPACE, v),
-						pad)
+					out := fmt.Sprintf(" %s %s", padded, pad)
+					fmt.Fprint(t.out, out)
 				} else {
 					// the spaces between breaks the kube formatting
-					fmt.Fprintf(t.out, "%s%s",
-						padFunc(h, SPACE, v),
-						pad)
+					out := fmt.Sprintf("%s%s", padded, pad)
+					fmt.Fprint(t.out, out)
 				}
 			}
 		}

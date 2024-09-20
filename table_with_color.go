@@ -98,7 +98,8 @@ func format(s string, codes interface{}) string {
 	if len(seq) == 0 {
 		return s
 	}
-	return startFormat(seq) + s + stopFormat()
+	formatted := startFormat(seq) + s + stopFormat()
+	return formatted
 }
 
 // Adding header colors (ANSI codes)
@@ -107,7 +108,7 @@ func (t *Table) SetHeaderColor(colors ...Colors) {
 		panic("Number of header colors must be equal to number of headers.")
 	}
 	for i := 0; i < len(colors); i++ {
-		t.headerParams = append(t.headerParams, makeSequence(colors[i]))
+		t.headerColorSeqs = append(t.headerColorSeqs, makeSequence(colors[i]))
 	}
 }
 
