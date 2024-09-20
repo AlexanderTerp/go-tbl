@@ -1,4 +1,4 @@
-package tablewriter
+package tblwriter
 
 import (
 	"encoding/csv"
