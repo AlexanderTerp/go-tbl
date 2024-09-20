@@ -1,4 +1,4 @@
-module github.com/AlexanderTerp/go-tbl
+module github.com/amterp/go-tbl
 
 go 1.12
 
