@@ -91,48 +91,47 @@ type Table struct {
 	tablePadding            string
 	hdrLine                 bool
 	borders                 Border
-	colSize                 int
-	headerColorSeqs         []string
-	columnsParams           []string
-	footerParams            []string
+	numColumns              int
+	headerMods              []HeaderMod // indexed by column
+	columnMods              []ColumnMod
 	columnsAlign            []int
+	forceNoColor            bool
 }
 
 // NewWriter Start New Table
 // Take io.Writer Directly
 func NewWriter(writer io.Writer) *Table {
 	t := &Table{
-		out:             writer,
-		rows:            [][]string{},
-		lines:           [][][]string{},
-		cs:              make(map[int]int),
-		rs:              make(map[int]int),
-		headers:         [][]string{},
-		footers:         [][]string{},
-		caption:         false,
-		captionText:     "Table caption.",
-		autoFmt:         true,
-		autoWrap:        true,
-		reflowText:      true,
-		mW:              MAX_ROW_WIDTH,
-		syms:            simpleSyms(CENTER, ROW, COLUMN),
-		pCenter:         CENTER,
-		pRow:            ROW,
-		pColumn:         COLUMN,
-		tColumn:         -1,
-		tRow:            -1,
-		hAlign:          ALIGN_DEFAULT,
-		fAlign:          ALIGN_DEFAULT,
-		align:           ALIGN_DEFAULT,
-		newLine:         NEWLINE,
-		rowLine:         false,
-		hdrLine:         true,
-		borders:         Border{Left: true, Right: true, Bottom: true, Top: true},
-		colSize:         -1,
-		headerColorSeqs: []string{},
-		columnsParams:   []string{},
-		footerParams:    []string{},
-		columnsAlign:    []int{}}
+		out:          writer,
+		rows:         [][]string{},
+		lines:        [][][]string{},
+		cs:           make(map[int]int),
+		rs:           make(map[int]int),
+		headers:      [][]string{},
+		footers:      [][]string{},
+		caption:      false,
+		captionText:  "Table caption.",
+		autoFmt:      true,
+		autoWrap:     true,
+		reflowText:   true,
+		mW:           MAX_ROW_WIDTH,
+		syms:         simpleSyms(CENTER, ROW, COLUMN),
+		pCenter:      CENTER,
+		pRow:         ROW,
+		pColumn:      COLUMN,
+		tColumn:      -1,
+		tRow:         -1,
+		hAlign:       ALIGN_DEFAULT,
+		fAlign:       ALIGN_DEFAULT,
+		align:        ALIGN_DEFAULT,
+		newLine:      NEWLINE,
+		rowLine:      false,
+		hdrLine:      true,
+		borders:      Border{Left: true, Right: true, Bottom: true, Top: true},
+		numColumns:   -1,
+		headerMods:   []HeaderMod{},
+		columnMods:   []ColumnMod{},
+		columnsAlign: []int{}}
 	return t
 }
 
@@ -164,7 +163,7 @@ const (
 
 // SetHeader Set table header
 func (t *Table) SetHeader(keys []string) {
-	t.colSize = len(keys)
+	t.numColumns = len(keys)
 	for i, v := range keys {
 		lines := t.parseDimension(v, i, headerRowIdx)
 		t.headers = append(t.headers, lines)
@@ -173,7 +172,6 @@ func (t *Table) SetHeader(keys []string) {
 
 // SetFooter Set table Footer
 func (t *Table) SetFooter(keys []string) {
-	//t.colSize = len(keys)
 	for i, v := range keys {
 		lines := t.parseDimension(v, i, footerRowIdx)
 		t.footers = append(t.footers, lines)
@@ -420,8 +418,8 @@ func (t *Table) SetStructs(v interface{}) error {
 // Append row to table
 func (t *Table) Append(row []string) {
 	rowSize := len(t.headers)
-	if rowSize > t.colSize {
-		t.colSize = rowSize
+	if rowSize > t.numColumns {
+		t.numColumns = rowSize
 	}
 
 	n := len(t.lines)
@@ -440,10 +438,10 @@ func (t *Table) Append(row []string) {
 }
 
 // Rich Append row to table with color attributes
-func (t *Table) Rich(row []string, colors []Colors) {
+func (t *Table) Rich(row []string, mods []RowCellMod) {
 	rowSize := len(t.headers)
-	if rowSize > t.colSize {
-		t.colSize = rowSize
+	if rowSize > t.numColumns {
+		t.numColumns = rowSize
 	}
 
 	n := len(t.lines)
@@ -455,9 +453,9 @@ func (t *Table) Rich(row []string, colors []Colors) {
 		// Break strings into words
 		out := t.parseDimension(v, i, n)
 
-		if len(colors) > i {
-			color := colors[i]
-			out[0] = format(out[0], color)
+		if len(mods) > i {
+			mod := mods[i]
+			out[0] = t.colorize(out[0], mod.color)
 		}
 
 		// Append broken words
@@ -596,7 +594,7 @@ func (t *Table) printHeading() {
 
 	// Checking for ANSI escape sequences for header
 	isEscSeq := false
-	if len(t.headerColorSeqs) > 0 {
+	if len(t.headerMods) > 0 {
 		isEscSeq = true
 	}
 
@@ -628,8 +626,8 @@ func (t *Table) printHeading() {
 			}
 			padded := padFunc(header, SPACE, v)
 			if isEscSeq {
-				colorSeq := t.headerColorSeqs[y]
-				formatted := format(padded, colorSeq)
+				headerMod := t.headerMods[y]
+				formatted := t.colorize(padded, headerMod.color)
 				if !t.noWhiteSpace {
 					out := fmt.Sprintf(" %s %s", formatted, pad)
 					fmt.Fprint(t.out, out)
@@ -674,12 +672,6 @@ func (t *Table) printFooter() {
 	// Get pad function
 	padFunc := pad(t.fAlign)
 
-	// Checking for ANSI escape sequences for header
-	is_esc_seq := false
-	if len(t.footerParams) > 0 {
-		is_esc_seq = true
-	}
-
 	// Maximum height.
 	max := t.rs[footerRowIdx]
 
@@ -710,19 +702,8 @@ func (t *Table) printFooter() {
 				erasePad[y] = true
 			}
 
-			if is_esc_seq {
-				fmt.Fprintf(t.out, " %s %s",
-					format(padFunc(f, SPACE, v),
-						t.footerParams[y]), pad)
-			} else {
-				fmt.Fprintf(t.out, " %s %s",
-					padFunc(f, SPACE, v),
-					pad)
-			}
-
-			//fmt.Fprintf(t.out, " %s %s",
-			//	padFunc(f, SPACE, v),
-			//	pad)
+			padded := padFunc(f, SPACE, v)
+			fmt.Fprintf(t.out, " %s %s", padded, pad)
 		}
 		// Next line
 		fmt.Fprint(t.out, t.newLine)
@@ -816,11 +797,11 @@ func (t *Table) getTableWidth() int {
 	}
 
 	// Add chars, spaces, seperators to calculate the total width of the table.
-	// ncols := t.colSize
+	// ncols := t.numColumns
 	// spaces := ncols * 2
 	// seps := ncols + 1
 
-	return (chars + (3 * t.colSize) + 2)
+	return (chars + (3 * t.numColumns) + 2)
 }
 
 // printRows - print all the rows
@@ -847,20 +828,12 @@ func (t *Table) printRow(columns [][]string, rowIdx int) {
 	max := t.rs[rowIdx]
 	total := len(columns)
 
-	// TODO Fix uneven col size
-	// if total < t.colSize {
-	//	for n := t.colSize - total; n < t.colSize ; n++ {
-	//		columns = append(columns, []string{SPACE})
-	//		t.cs[n] = t.mW
-	//	}
-	//}
-
 	// Pad Each Height
 	pads := []int{}
 
 	// Checking for ANSI escape sequences for columns
 	is_esc_seq := false
-	if len(t.columnsParams) > 0 {
+	if len(t.columnMods) > 0 {
 		is_esc_seq = true
 	}
 	t.fillAlignment(total)
@@ -873,7 +846,7 @@ func (t *Table) printRow(columns [][]string, rowIdx int) {
 			columns[i] = append(columns[i], "  ")
 		}
 	}
-	//fmt.Println(max, "\n")
+
 	for x := 0; x < max; x++ {
 		for y := 0; y < total; y++ {
 
@@ -887,7 +860,7 @@ func (t *Table) printRow(columns [][]string, rowIdx int) {
 
 			// Embedding escape sequence with column value
 			if is_esc_seq {
-				str = format(str, t.columnsParams[y])
+				str = t.colorize(str, t.columnMods[y].color)
 			}
 
 			// This would print alignment
@@ -904,14 +877,6 @@ func (t *Table) printRow(columns [][]string, rowIdx int) {
 					fmt.Fprintf(t.out, "%s", PadLeft(str, SPACE, t.cs[y]))
 				} else {
 					fmt.Fprintf(t.out, "%s", PadRight(str, SPACE, t.cs[y]))
-
-					// TODO Custom alignment per column
-					//if max == 1 || pads[y] > 0 {
-					//	fmt.Fprintf(t.out, "%s", Pad(str, SPACE, t.cs[y]))
-					//} else {
-					//	fmt.Fprintf(t.out, "%s", PadRight(str, SPACE, t.cs[y]))
-					//}
-
 				}
 			}
 			if !t.noWhiteSpace {
@@ -966,7 +931,7 @@ func (t *Table) printRowMergeCells(writer io.Writer, columns [][]string, rowIdx 
 
 	// Checking for ANSI escape sequences for columns
 	isEscSeq := false
-	if len(t.columnsParams) > 0 {
+	if len(t.columnMods) > 0 {
 		isEscSeq = true
 	}
 	for i, line := range columns {
@@ -992,7 +957,7 @@ func (t *Table) printRowMergeCells(writer io.Writer, columns [][]string, rowIdx 
 
 			// Embedding escape sequence with column value
 			if isEscSeq {
-				str = format(str, t.columnsParams[y])
+				str = t.colorize(str, t.columnMods[y].color)
 			}
 
 			if t.autoMergeCells {

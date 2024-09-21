@@ -1714,16 +1714,16 @@ func TestRadTableHeadersAlign(t *testing.T) {
 	table.SetNoWhiteSpace(true)
 
 	table.SetHeader([]string{"Date", "Name"})
-	table.SetHeaderColor(Colors{FgYellowColor}, Colors{FgYellowColor})
+	table.SetHeaderColors(Yellow, Yellow)
 
 	table.AppendBulk(data) // Add Bulk Data
 	table.Render()
 
 	// todo looks like i found why there are 0 coloring unit tests -- seems this simple assertion does not work?
-	// need to figure out. As of writing, this test should pass tho.
+	//need to figure out. As of writing, this test should pass tho.
 	//	want := strings.ReplaceAll(fmt.Sprintf(`%s                  %s        $
 	//2024-09-19T22:16:24Z  pigwantacat  $
 	//`, format("Date", Colors{FgYellowColor}), format("Name", Colors{FgYellowColor})), "$", "")
 
-	//assertEqualStr(t, buf.String(), want, "border table rendering failed")
+	//assertEqualStr(t, buf.String(), "", "border table rendering failed")
 }
