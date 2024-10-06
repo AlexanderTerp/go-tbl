@@ -3,6 +3,7 @@ package tblwriter
 import (
 	"fmt"
 	"github.com/fatih/color"
+	"regexp"
 )
 
 type Color int
@@ -33,12 +34,16 @@ type HeaderMod struct {
 	color Color
 }
 
-type RowCellMod struct {
+type ColumnMod struct {
+	regex *regexp.Regexp
 	color Color
 }
 
-type ColumnMod struct {
-	color Color
+func NewColumnMod(regex *regexp.Regexp, color Color) ColumnMod {
+	return ColumnMod{
+		regex: regex,
+		color: color,
+	}
 }
 
 var (

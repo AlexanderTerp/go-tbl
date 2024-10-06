@@ -1,14 +1,37 @@
 package tblwriter
 
-import "github.com/fatih/color"
+import (
+	"github.com/fatih/color"
+	"regexp"
+	"strings"
+)
+
+var COLOR_ALL = regexp.MustCompile("[\\s\\S]*")
 
 func (t *Table) colorize(s string, c Color) string {
-	if t.forceNoColor || c == Plain {
+	return t.colorizeRegex(s, c, COLOR_ALL)
+}
+
+func (t *Table) colorizeRegex(s string, c Color, regexp *regexp.Regexp) string {
+	if t.forceNoColor || c == Plain || regexp == nil {
 		return s
 	}
 
-	libColor := c.toLibColor()
-	return libColor.SprintFunc()(s)
+	colorFunc := c.toLibColor().SprintFunc()
+
+	var result strings.Builder
+	lastIndex := 0
+	matches := regexp.FindAllStringIndex(s, -1)
+
+	for _, match := range matches {
+		start, end := match[0], match[1]
+		result.WriteString(s[lastIndex:start])
+		result.WriteString(colorFunc(s[start:end]))
+		lastIndex = end
+	}
+
+	result.WriteString(s[lastIndex:])
+	return result.String()
 }
 
 func (t *Table) ToggleColor(enabled bool) {
@@ -29,6 +52,6 @@ func (t *Table) SetHeaderMods(mods ...HeaderMod) {
 	t.headerMods = mods
 }
 
-func (t *Table) SetColumnMods(mods ...ColumnMod) {
-	t.columnMods = mods
+func (t *Table) SetColumnMods(mods map[int]ColumnMod) {
+	t.columnModsByIdx = mods
 }

@@ -93,7 +93,7 @@ type Table struct {
 	borders                 Border
 	numColumns              int
 	headerMods              []HeaderMod // indexed by column
-	columnMods              []ColumnMod
+	columnModsByIdx         map[int]ColumnMod
 	columnsAlign            []int
 	forceNoColor            bool
 }
@@ -102,36 +102,36 @@ type Table struct {
 // Take io.Writer Directly
 func NewWriter(writer io.Writer) *Table {
 	t := &Table{
-		out:          writer,
-		rows:         [][]string{},
-		lines:        [][][]string{},
-		cs:           make(map[int]int),
-		rs:           make(map[int]int),
-		headers:      [][]string{},
-		footers:      [][]string{},
-		caption:      false,
-		captionText:  "Table caption.",
-		autoFmt:      true,
-		autoWrap:     true,
-		reflowText:   true,
-		mW:           MAX_ROW_WIDTH,
-		syms:         simpleSyms(CENTER, ROW, COLUMN),
-		pCenter:      CENTER,
-		pRow:         ROW,
-		pColumn:      COLUMN,
-		tColumn:      -1,
-		tRow:         -1,
-		hAlign:       ALIGN_DEFAULT,
-		fAlign:       ALIGN_DEFAULT,
-		align:        ALIGN_DEFAULT,
-		newLine:      NEWLINE,
-		rowLine:      false,
-		hdrLine:      true,
-		borders:      Border{Left: true, Right: true, Bottom: true, Top: true},
-		numColumns:   -1,
-		headerMods:   []HeaderMod{},
-		columnMods:   []ColumnMod{},
-		columnsAlign: []int{}}
+		out:             writer,
+		rows:            [][]string{},
+		lines:           [][][]string{},
+		cs:              make(map[int]int),
+		rs:              make(map[int]int),
+		headers:         [][]string{},
+		footers:         [][]string{},
+		caption:         false,
+		captionText:     "Table caption.",
+		autoFmt:         true,
+		autoWrap:        true,
+		reflowText:      true,
+		mW:              MAX_ROW_WIDTH,
+		syms:            simpleSyms(CENTER, ROW, COLUMN),
+		pCenter:         CENTER,
+		pRow:            ROW,
+		pColumn:         COLUMN,
+		tColumn:         -1,
+		tRow:            -1,
+		hAlign:          ALIGN_DEFAULT,
+		fAlign:          ALIGN_DEFAULT,
+		align:           ALIGN_DEFAULT,
+		newLine:         NEWLINE,
+		rowLine:         false,
+		hdrLine:         true,
+		borders:         Border{Left: true, Right: true, Bottom: true, Top: true},
+		numColumns:      -1,
+		headerMods:      []HeaderMod{},
+		columnModsByIdx: map[int]ColumnMod{},
+		columnsAlign:    []int{}}
 	return t
 }
 
@@ -430,33 +430,6 @@ func (t *Table) Append(row []string) {
 		// Detect String height
 		// Break strings into words
 		out := t.parseDimension(v, i, n)
-
-		// Append broken words
-		line = append(line, out)
-	}
-	t.lines = append(t.lines, line)
-}
-
-// Rich Append row to table with color attributes
-func (t *Table) Rich(row []string, mods []RowCellMod) {
-	rowSize := len(t.headers)
-	if rowSize > t.numColumns {
-		t.numColumns = rowSize
-	}
-
-	n := len(t.lines)
-	line := [][]string{}
-	for i, v := range row {
-
-		// Detect string  width
-		// Detect String height
-		// Break strings into words
-		out := t.parseDimension(v, i, n)
-
-		if len(mods) > i {
-			mod := mods[i]
-			out[0] = t.colorize(out[0], mod.color)
-		}
 
 		// Append broken words
 		line = append(line, out)
@@ -833,7 +806,7 @@ func (t *Table) printRow(columns [][]string, rowIdx int) {
 
 	// Checking for ANSI escape sequences for columns
 	is_esc_seq := false
-	if len(t.columnMods) > 0 {
+	if len(t.columnModsByIdx) > 0 {
 		is_esc_seq = true
 	}
 	t.fillAlignment(total)
@@ -860,7 +833,8 @@ func (t *Table) printRow(columns [][]string, rowIdx int) {
 
 			// Embedding escape sequence with column value
 			if is_esc_seq {
-				str = t.colorize(str, t.columnMods[y].color)
+				mod := t.columnModsByIdx[y]
+				str = t.colorizeRegex(str, mod.color, mod.regex)
 			}
 
 			// This would print alignment
@@ -931,7 +905,7 @@ func (t *Table) printRowMergeCells(writer io.Writer, columns [][]string, rowIdx 
 
 	// Checking for ANSI escape sequences for columns
 	isEscSeq := false
-	if len(t.columnMods) > 0 {
+	if len(t.columnModsByIdx) > 0 {
 		isEscSeq = true
 	}
 	for i, line := range columns {
@@ -957,7 +931,8 @@ func (t *Table) printRowMergeCells(writer io.Writer, columns [][]string, rowIdx 
 
 			// Embedding escape sequence with column value
 			if isEscSeq {
-				str = t.colorize(str, t.columnMods[y].color)
+				mod := t.columnModsByIdx[y]
+				str = t.colorizeRegex(str, mod.color, mod.regex)
 			}
 
 			if t.autoMergeCells {

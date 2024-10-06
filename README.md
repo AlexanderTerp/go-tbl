@@ -13,3 +13,11 @@ In your Go project:
 ```shell
 go get github.com/amterp/go-tbl
 ```
+
+## Dev
+
+### Release Process
+
+1. Commit your changes.
+2. `git tag <version>` e.g. `git tag v0.5.0`
+3. `git push origin main --tags`
