@@ -834,7 +834,7 @@ func (t *Table) printRow(columns [][]string, rowIdx int) {
 			// Embedding escape sequence with column value
 			if is_esc_seq {
 				mod := t.columnModsByIdx[y]
-				str = t.colorizeRegex(str, mod.color, mod.regex)
+				str = t.colorizeWithRegex(str, mod.coloring)
 			}
 
 			// This would print alignment
@@ -932,7 +932,7 @@ func (t *Table) printRowMergeCells(writer io.Writer, columns [][]string, rowIdx 
 			// Embedding escape sequence with column value
 			if isEscSeq {
 				mod := t.columnModsByIdx[y]
-				str = t.colorizeRegex(str, mod.color, mod.regex)
+				str = t.colorizeWithRegex(str, mod.coloring)
 			}
 
 			if t.autoMergeCells {

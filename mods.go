@@ -34,15 +34,25 @@ type HeaderMod struct {
 	color Color
 }
 
-type ColumnMod struct {
+type ColumnColorMod struct {
 	regex *regexp.Regexp
 	color Color
 }
 
-func NewColumnMod(regex *regexp.Regexp, color Color) ColumnMod {
-	return ColumnMod{
+type ColumnMod struct {
+	coloring []ColumnColorMod
+}
+
+func NewColumnColorMod(regex *regexp.Regexp, color Color) ColumnColorMod {
+	return ColumnColorMod{
 		regex: regex,
 		color: color,
+	}
+}
+
+func NewColumnMod(coloring []ColumnColorMod) ColumnMod {
+	return ColumnMod{
+		coloring: coloring,
 	}
 }
 
